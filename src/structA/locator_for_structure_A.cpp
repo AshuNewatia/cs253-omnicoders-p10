@@ -50,6 +50,11 @@ private:
 
 public:
     LookUp() : tab(CAP, e) {}
+    int find(int id) const {
+        const int slot = find_slot(id);
+        if (slot == -1) throw std::out_of_range("Not Found");
+        return tab[slot].address;
+    }
 
     void Insert(twin in) {
         // If tombstones caused the table to fill, rehash at the same size;
@@ -58,7 +63,15 @@ public:
             const int new_capacity = (state_count + 1) * 2 < CAP ? CAP : 2 * CAP;
             resize(new_capacity);
         }
-
+        bool flag = 0;
+            try {
+                int temp = find(in.ID);
+            } catch(std::out_of_range &e) {
+                flag = 1;
+            }
+            if(!flag){
+                throw std::invalid_argument("ID already exists");
+            }
         const int start = static_cast<int>(hashie(in.ID) % CAP);
         int first_deleted = -1;
         for (int offset = 0; offset < CAP; ++offset) {
@@ -88,11 +101,7 @@ public:
         Insert(in);
     }
 
-    int find(int id) const {
-        const int slot = find_slot(id);
-        if (slot == -1) throw std::out_of_range("Not Found");
-        return tab[slot].address;
-    }
+    
 
     void Delete(int id) {
         const int slot = find_slot(id);
