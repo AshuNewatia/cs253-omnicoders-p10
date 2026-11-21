@@ -70,19 +70,45 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
 
-    summary = RESULTS / "d5_worst_patterns.csv"
-    with summary.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["structure", "pattern", "total_extraction_comparisons"])
-        totals = {}
-        for row in rows:
-            key = (row["structure"], row["pattern"])
-            totals[key] = totals.get(key, 0) + row["extract_comparisons"]
-        for structure in ("A", "B"):
-            ranked = sorted(((pattern, value) for (s, pattern), value in totals.items()
-                             if s == structure), key=lambda x: x[1], reverse=True)
-            for pattern, value in ranked:
-                writer.writerow([structure, pattern, value])
+summary = RESULTS / "d5_worst_patterns.csv"
+
+with summary.open("w", newline="") as f:
+    writer = csv.writer(f)
+
+    writer.writerow([
+        "structure",
+        "pattern",
+        "average_extraction_comparisons"
+    ])
+
+    averages = {}
+
+    for row in rows:
+        key = (row["structure"], row["pattern"])
+
+        if key not in averages:
+            averages[key] = []
+
+        averages[key].append(row["extract_comparisons"])
+
+    for structure in ("A", "B"):
+
+        ranked = []
+
+        for (s, pattern), values in averages.items():
+
+            if s == structure:
+                average = sum(values) / len(values)
+                ranked.append((pattern, average))
+
+        ranked.sort(key=lambda x: x[1], reverse=True)
+
+        for pattern, average in ranked:
+            writer.writerow([
+                structure,
+                pattern,
+                f"{average:.2f}"
+            ])
 
     print(f"\nResults written to: {output}")
     print(f"Pattern ranking written to: {summary}")
