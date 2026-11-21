@@ -91,6 +91,7 @@ The two structures produced identical counts in these tests. This is an empirica
 - The lower-bound proof establishes that a hard distinct-key input exists; finite experiments cannot prove that the tested descending pattern is the true worst case for all sizes.
 - The benchmark measures key-comparator work only. It does not measure wall-clock runtime or peak memory, so no memory-performance claim is made.
 - Results depend on the submitted queue implementations, compiler, and benchmark setup. Re-run the script after any queue changes.
+- The aggregate pattern ranking uses the average extraction-comparison count across the tested input sizes and seeds. This avoids giving the random pattern an artificial advantage because it uses three seeds while the deterministic patterns use one seed. The per-size results are used to identify the strongest tested pattern at each input size.
 
 ## 7. Oracle baseline
 
