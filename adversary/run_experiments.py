@@ -28,6 +28,8 @@ def main():
     seeds = [int(x) for x in args.seeds.split(",")]
     if any(n < 2 for n in sizes):
         parser.error("all sizes must be >= 2")
+    if not seeds:
+        parser.error("at least one seed is required ")
 
     RESULTS.mkdir(exist_ok=True)
     generator = ADV / ("adversary.exe" if sys.platform == "win32" else "adversary")
@@ -48,6 +50,7 @@ def main():
             use_seeds = seeds if pattern == "random" else [seeds[0]]
             for seed in use_seeds:
                 csv_path = ADV / f"input_{n}_{pattern}_{seed}.csv"
+            try:
                 with csv_path.open("w", newline="") as f:
                     run([generator, n, pattern, seed], stdout=f)
                 for structure, exe in (("A", bench_a), ("B", bench_b)):
@@ -62,6 +65,7 @@ def main():
                         "extract_comparisons_per_nlog2n":
                             f"{comparisons / (n * math.log2(n)):.6f}"
                     })
+            finally:
                 csv_path.unlink(missing_ok=True)
                 print(f"completed n={n}, pattern={pattern}, seed={seed}")
 
@@ -72,30 +76,26 @@ def main():
 
 summary = RESULTS / "d5_worst_patterns.csv"
 
+size_average = {}
+for row in rows:
+            key = (row["structure'],row["pattern"],row["n"] )
+            size_averages.setdefault(key,[]).append(
+                                                     row["extract_comparisions"])
+          pattern_averages = {}
+          for key, values in size_averages.items():
+               structure, pattern , n = key 
+               average = sum(values)/len(values)
+               pattern_key = (structure , pattern)
+               pattern_averages.setdefault(pattern_key,[]).append(average)
 with summary.open("w", newline="") as f:
-    writer = csv.writer(f)
-
-    writer.writerow([
-        "structure",
-        "pattern",
-        "average_extraction_comparisons"
-    ])
-
-    averages = {}
-
-    for row in rows:
-        key = (row["structure"], row["pattern"])
-
-        if key not in averages:
-            averages[key] = []
-
-        averages[key].append(row["extract_comparisons"])
+       writer = csv.writer(f)
+       writer.writerow(["structure","pattern","average_extraction_comparisons"])
 
     for structure in ("A", "B"):
 
         ranked = []
 
-        for (s, pattern), values in averages.items():
+        for (s, pattern), values in pattern_averages.items():
 
             if s == structure:
                 average = sum(values) / len(values)
@@ -109,7 +109,7 @@ with summary.open("w", newline="") as f:
                 pattern,
                 f"{average:.2f}"
             ])
-
+    print("\nExperiments completed successfully.")
     print(f"\nResults written to: {output}")
     print(f"Pattern ranking written to: {summary}")
 
