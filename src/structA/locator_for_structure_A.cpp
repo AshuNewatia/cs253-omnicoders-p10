@@ -1,112 +1,136 @@
-#include <algorithm>
-#include <stdexcept>
-#include <string>
-#include <vector>
+#ifndef TRIAGE_STRUCTURE_A_LOCATOR_H
+#define TRIAGE_STRUCTURE_A_LOCATOR_H
 
-int CAP = 1024;
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 struct twin {
     int ID;
-    int address;
-    twin(int id, int index = -1) : ID(id), address(index) {}
-};
+    std::size_t address;
 
-twin e(-1, -1);
+    twin(int id, std::size_t index) : ID(id), address(index) {}
+};
 
 class LookUp {
 private:
-    std::vector<twin> tab;
-    int state_count = 0;
-    // Includes deleted slots: this is the actual probe-table occupancy.
-    int used_count = 0;
+    enum class SlotState : unsigned char { Empty, Occupied, Deleted };
 
-    long long hashie(int input) const {
-        const std::string input_str = std::to_string(input);
-        long long hash = 0;
-        for (char ch : input_str) hash = hash * 31 + static_cast<unsigned char>(ch);
-        return hash;
+    struct Slot {
+        int id = 0;
+        std::size_t index = 0;
+        SlotState state = SlotState::Empty;
+    };
+
+    static const std::size_t INITIAL_CAPACITY = 1024;
+    std::vector<Slot> slots;
+    std::size_t live_count = 0;
+    std::size_t used_count = 0;
+
+    std::size_t hash_id(int id) const {
+        // Mix the full 32-bit representation; negative IDs are valid too.
+        std::uint32_t value = static_cast<std::uint32_t>(id);
+        value ^= value >> 16;
+        value *= 0x7feb352dU;
+        value ^= value >> 15;
+        value *= 0x846ca68bU;
+        value ^= value >> 16;
+        return static_cast<std::size_t>(value) % slots.size();
     }
 
-    int find_slot(int id) const {
-        const int start = static_cast<int>(hashie(id) % CAP);
-        for (int offset = 0; offset < CAP; ++offset) {
-            const int slot = (start + offset) % CAP;
-            if (tab[slot].ID == id) return slot;
-            if (tab[slot].ID == -1) return -1;
+    std::size_t find_slot(int id) const {
+        const std::size_t start = hash_id(id);
+        for (std::size_t step = 0; step < slots.size(); ++step) {
+            const std::size_t slot = (start + step) % slots.size();
+            if (slots[slot].state == SlotState::Empty) return slots.size();
+            if (slots[slot].state == SlotState::Occupied && slots[slot].id == id)
+                return slot;
         }
-        return -1;
+        return slots.size();
     }
 
-    void resize(int new_capacity) {
-        const std::vector<twin> old_tab = tab;
-        CAP = new_capacity;
-        tab.assign(CAP, e);
-        state_count = 0;
+    void insert_without_resize(int id, std::size_t index) {
+        const std::size_t start = hash_id(id);
+        std::size_t first_deleted = slots.size();
+        for (std::size_t step = 0; step < slots.size(); ++step) {
+            const std::size_t slot = (start + step) % slots.size();
+            if (slots[slot].state == SlotState::Deleted && first_deleted == slots.size())
+                first_deleted = slot;
+            if (slots[slot].state == SlotState::Empty) {
+                const std::size_t target = first_deleted == slots.size() ? slot : first_deleted;
+                if (first_deleted == slots.size()) ++used_count;
+                slots[target].id = id;
+                slots[target].index = index;
+                slots[target].state = SlotState::Occupied;
+                ++live_count;
+                return;
+            }
+        }
+        if (first_deleted != slots.size()) {
+            slots[first_deleted].id = id;
+            slots[first_deleted].index = index;
+            slots[first_deleted].state = SlotState::Occupied;
+            ++live_count;
+            return;
+        }
+        throw std::logic_error("locator has no free slot");
+    }
+
+    void rehash(std::size_t new_capacity) {
+        std::vector<Slot> old_slots;
+        old_slots.swap(slots);
+        slots.assign(new_capacity, Slot{});
+        live_count = 0;
         used_count = 0;
-        for (const twin& entry : old_tab) {
-            if (entry.ID != -1 && entry.ID != -2) Insert(entry);
+        for (const Slot& slot : old_slots) {
+            if (slot.state == SlotState::Occupied)
+                insert_without_resize(slot.id, slot.index);
         }
     }
 
 public:
-    LookUp() : tab(CAP, e) {}
+    LookUp() : slots(INITIAL_CAPACITY) {}
 
-    void Insert(twin in) {
-        // If tombstones caused the table to fill, rehash at the same size;
-        // grow only when the live set itself needs more capacity.
-        if ((used_count + 1) * 10 >= CAP * 7) {
-            const int new_capacity = (state_count + 1) * 2 < CAP ? CAP : 2 * CAP;
-            resize(new_capacity);
-        }
-
-        const int start = static_cast<int>(hashie(in.ID) % CAP);
-        int first_deleted = -1;
-        for (int offset = 0; offset < CAP; ++offset) {
-            const int slot = (start + offset) % CAP;
-            if (tab[slot].ID == in.ID) {
-                tab[slot].address = in.address;
-                return;
-            }
-            if (tab[slot].ID == -2 && first_deleted == -1)
-                first_deleted = slot;
-            if (tab[slot].ID == -1) {
-                const int put = first_deleted == -1 ? slot : first_deleted;
-                if (first_deleted == -1) ++used_count;
-                tab[put] = in;
-                ++state_count;
-                return;
-            }
-        }
-
-        // A full probe cycle may still find a reusable tombstone.
-        if (first_deleted != -1) {
-            tab[first_deleted] = in;
-            ++state_count;
-            return;
-        }
-        resize(2 * CAP);
-        Insert(in);
+    bool contains(int id) const {
+        return find_slot(id) != slots.size();
     }
 
-    int find(int id) const {
-        const int slot = find_slot(id);
-        if (slot == -1) throw std::out_of_range("Not Found");
-        return tab[slot].address;
+    std::size_t find(int id) const {
+        const std::size_t slot = find_slot(id);
+        if (slot == slots.size()) throw std::out_of_range("patient ID not found in locator");
+        return slots[slot].index;
+    }
+
+    void Insert(twin entry) {
+        if (contains(entry.ID))
+            throw std::invalid_argument("patient ID is already present in locator");
+
+        if ((used_count + 1) * 10 >= slots.size() * 7) {
+            const std::size_t new_capacity =
+                (live_count + 1) * 10 >= slots.size() * 7
+                    ? slots.size() * 2
+                    : slots.size();
+            rehash(new_capacity);
+        }
+        insert_without_resize(entry.ID, entry.address);
     }
 
     void Delete(int id) {
-        const int slot = find_slot(id);
-        if (slot == -1) throw std::out_of_range("Not Found");
-        tab[slot].address = -1;
-        tab[slot].ID = -2;
-        --state_count;
+        const std::size_t slot = find_slot(id);
+        if (slot == slots.size()) throw std::out_of_range("patient ID not found in locator");
+        slots[slot].state = SlotState::Deleted;
+        --live_count;
     }
 
     void interchange(int first_id, int second_id) {
-        const int first = find_slot(first_id);
-        const int second = find_slot(second_id);
-        if (first == -1 || second == -1)
-            throw std::out_of_range("Locator entry missing during heap swap");
-        std::swap(tab[first].address, tab[second].address);
+        const std::size_t first = find_slot(first_id);
+        const std::size_t second = find_slot(second_id);
+        if (first == slots.size() || second == slots.size())
+            throw std::out_of_range("locator entry missing during heap swap");
+        std::swap(slots[first].index, slots[second].index);
     }
 };
+
+#endif

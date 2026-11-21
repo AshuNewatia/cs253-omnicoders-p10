@@ -1,223 +1,142 @@
-#include <iostream>
-#include <vector>
+#ifndef TRIAGE_STRUCTURE_A_H
+#define TRIAGE_STRUCTURE_A_H
+
+#include <cstddef>
 #include <stdexcept>
-#include <string>
-#include <algorithm>
+#include <utility>
+#include <vector>
 
 #include "locator_for_structure_A.cpp"
 #include "../../app/ITriageQueue.h"
 
 #ifdef D5_COUNT_COMPARISONS
 extern unsigned long long d5_comparisons;
-#define D5_COMPARE(expression) (++d5_comparisons, (expression))
-#else
-#define D5_COMPARE(expression) (expression)
 #endif
 
 class Min_Heap : public ITriageQueue {
 private:
     LookUp table;
     std::vector<Patient> Heap;
-    int count = 0;
 
     static bool comes_before(const Patient& a, const Patient& b) {
+#ifdef D5_COUNT_COMPARISONS
+        ++d5_comparisons;
+#endif
         if (a.priority_key != b.priority_key)
-            return D5_COMPARE(a.priority_key < b.priority_key);
+            return a.priority_key < b.priority_key;
         if (a.arrival_time != b.arrival_time)
             return a.arrival_time < b.arrival_time;
         return a.id < b.id;
     }
 
-    void Sift_Down(int index) {
-        if (2 * index + 1 >= count) {
-            return;
-        }
+    void swap_nodes(std::size_t first, std::size_t second) {
+        if (first == second) return;
+        std::swap(Heap[first], Heap[second]);
+        table.interchange(Heap[first].id, Heap[second].id);
+    }
 
-        if (2 * index + 2 >= count) {
-            int left = 2 * index + 1;
-
- adversary
-            if (D5_COMPARE(
-                    Heap[left].priority_key < Heap[index].priority_key
-                )) {
-
-            if (comes_before(Heap[left], Heap[index])) {
- main
-                std::swap(Heap[left], Heap[index]);
-
-                table.interchange(
-                    Heap[index].id,
-                    Heap[left].id
-                );
-            }
-
-            return;
-        }
-
-        int left = 2 * index + 1;
-        int right = 2 * index + 2;
-
-adversary
-        int smallest =
-            D5_COMPARE(
-                Heap[right].priority_key < Heap[left].priority_key
-            )
-                ? right
-                : left;
-
-        if (D5_COMPARE(
-                Heap[index].priority_key > Heap[smallest].priority_key
-            )) {
-
-        int smallest = comes_before(Heap[right], Heap[left]) ? right : left;
-
-        if (comes_before(Heap[smallest], Heap[index])) {
- main
-            std::swap(Heap[index], Heap[smallest]);
-
-            table.interchange(
-                Heap[index].id,
-                Heap[smallest].id
-            );
-
-            Sift_Down(smallest);
+    void sift_up(std::size_t index) {
+        while (index > 0) {
+            const std::size_t parent = (index - 1) / 2;
+            if (!comes_before(Heap[index], Heap[parent])) return;
+            swap_nodes(index, parent);
+            index = parent;
         }
     }
 
-    void heapify() {
-        for (int i = count / 2 - 1; i >= 0; i--) {
-            Sift_Down(i);
+    void sift_down(std::size_t index) {
+        const std::size_t size = Heap.size();
+        while (index < size / 2) {
+            const std::size_t left = 2 * index + 1;
+            const std::size_t right = left + 1;
+            std::size_t smallest = left;
+            if (right < size && comes_before(Heap[right], Heap[left]))
+                smallest = right;
+            if (!comes_before(Heap[smallest], Heap[index])) return;
+            swap_nodes(index, smallest);
+            index = smallest;
         }
     }
 
-    void Insertify(int index) {
-        if (index <= 0) {
-            return;
+    Patient remove_at(std::size_t index) {
+        const Patient removed = Heap[index];
+        const std::size_t last = Heap.size() - 1;
+        if (index != last) {
+            swap_nodes(index, last);
         }
+        table.Delete(removed.id);
+        Heap.pop_back();
 
-        int parent = (index - 1) / 2;
-
- adversary
-        if (D5_COMPARE(
-                Heap[parent].priority_key > Heap[index].priority_key
-            )) {
-
-        if (comes_before(Heap[index], Heap[parent])) {
- main
-            std::swap(Heap[parent], Heap[index]);
-
-            table.interchange(
-                Heap[index].id,
-                Heap[parent].id
-            );
-
-            Insertify(parent);
+        if (index < Heap.size()) {
+            if (index > 0 && comes_before(Heap[index], Heap[(index - 1) / 2]))
+                sift_up(index);
+            else
+                sift_down(index);
         }
+        return removed;
     }
 
 public:
     Min_Heap() = default;
 
-    Min_Heap(const std::vector<Patient>& patients) {
+    explicit Min_Heap(const std::vector<Patient>& patients) {
         build_heap(patients);
     }
 
-    void build_heap(
-        const std::vector<Patient>& patients
-    ) override {
-        table = LookUp();
-        Heap = patients;
-        count = static_cast<int>(Heap.size());
+    void build_heap(const std::vector<Patient>& patients) override {
+        // Build the locator first so duplicate IDs leave the current queue intact.
+        std::vector<Patient> next_heap(patients);
+        LookUp next_table;
+        for (std::size_t i = 0; i < next_heap.size(); ++i)
+            next_table.Insert(twin(next_heap[i].id, i));
 
-        for (int i = 0; i < count; i++) {
-            table.Insert(twin(Heap[i].id, i));
-        }
-
-        heapify();
+        Heap.swap(next_heap);
+        table = std::move(next_table);
+        for (std::size_t i = Heap.size() / 2; i > 0; --i)
+            sift_down(i - 1);
     }
 
     void insert(const Patient& patient) override {
-        Heap.push_back(patient);
-        count = static_cast<int>(Heap.size());
+        if (table.contains(patient.id))
+            throw std::invalid_argument("patient ID is already live");
 
-        table.Insert(twin(patient.id, count - 1));
-
-        Insertify(count - 1);
+        const std::size_t index = Heap.size();
+        table.Insert(twin(patient.id, index));
+        try {
+            Heap.push_back(patient);
+        } catch (...) {
+            table.Delete(patient.id);
+            throw;
+        }
+        sift_up(index);
     }
 
-    Patient peek() {
-        if (count == 0) {
-            throw std::out_of_range(
-                "No patients are currently waiting for triage."
-            );
-        }
-
+    Patient peek() const {
+        if (Heap.empty())
+            throw std::out_of_range("cannot peek at an empty triage queue");
         return Heap[0];
     }
 
     Patient extract_min() override {
-        if (count == 0) {
-            throw std::out_of_range(
-                "No patients are currently waiting for triage."
-            );
-        }
-
-        Patient minimum = Heap[0];
-
-        std::swap(Heap[0], Heap[count - 1]);
-
-        table.interchange(
-            Heap[count - 1].id,
-            Heap[0].id
-        );
-
-        table.Delete(Heap[count - 1].id);
-
-        Heap.pop_back();
-        count--;
-
-        Sift_Down(0);
-
-        return minimum;
+        if (Heap.empty())
+            throw std::out_of_range("cannot extract from an empty triage queue");
+        return remove_at(0);
     }
 
     void delete_patient(int id) override {
-        int index = table.find(id);
-
-        std::swap(Heap[index], Heap[count - 1]);
-
-        table.interchange(
-            Heap[index].id,
-            Heap[count - 1].id
-        );
-
-        table.Delete(Heap[count - 1].id);
-
-        Heap.pop_back();
-        count--;
-
-        if (index < count) {
-            if (index > 0 && comes_before(Heap[index], Heap[(index - 1) / 2]))
-                Insertify(index);
-            else
-                Sift_Down(index);
-        }
+        const std::size_t index = table.find(id);
+        remove_at(index);
     }
 
     void decrease_key(int id, long long new_key) override {
-        int index = table.find(id);
-
+        const std::size_t index = table.find(id);
         if (new_key > Heap[index].priority_key)
             throw std::invalid_argument("decrease_key cannot increase the key");
+        if (new_key == Heap[index].priority_key) return;
 
         Heap[index].priority_key = new_key;
-
-        Insertify(index);
+        sift_up(index);
     }
 };
 
- adversary
-#undef D5_COMPARE
-
-#undef D5_COMPARE
- main
+#endif
