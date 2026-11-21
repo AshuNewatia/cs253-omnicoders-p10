@@ -20,7 +20,7 @@ def run(cmd, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sizes", default="100,200,400,800,1600")
+    parser.add_argument("--sizes", default="100,200,400,800,1600,3200")
     parser.add_argument("--seeds", default="12345,2026,7",
                         help="comma-separated seeds; used for random pattern")
     args = parser.parse_args()
