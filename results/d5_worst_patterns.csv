@@ -1,11 +1,11 @@
 structure,pattern,average_extraction_comparisons
 A,descending,18152.00
+A,equal-reverse-arrival,18152.00
 A,alternating,17519.17
 A,random,17423.28
 A,bit-reversal,17422.17
 A,ascending,17398.67
 A,sawtooth,17380.83
-A,equal-reverse-arrival,0.00
 B,descending,18152.00
 B,equal-reverse-arrival,18152.00
 B,alternating,17519.17
