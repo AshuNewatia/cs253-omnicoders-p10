@@ -37,7 +37,7 @@ private:
             smallest = left;
         }
 
-        if (right<count && comes_before(Heap[right],Heap[smallest]) {
+        if (right<count && comes_before(Heap[right],Heap[smallest])) {
             smallest = right;
         }
        if (smallest == index){
