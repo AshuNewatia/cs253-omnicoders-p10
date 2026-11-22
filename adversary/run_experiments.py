@@ -52,7 +52,7 @@ def main():
     rows = []
     for n in sizes:
         for pattern in PATTERNS:
-            use_seeds = seeds if pattern == "random" else [seeds[0]]
+            pattern_seeds = seeds if pattern == "random" else [seeds[0]]
             for seed in pattern_seeds:
                 csv_path = ADV / f"input_{n}_{pattern}_{seed}.csv"
             try:
@@ -75,7 +75,7 @@ def main():
                                 ),
                     })
             finally:
-                csv_path.unlink(missing_ok=True)
+               if csv_path.exists():csv_path.unlink()
                 print(f"completed n={n}, pattern={pattern}, seed={seed}")
 
     with output.open("w", newline="") as csv_file:
@@ -88,11 +88,10 @@ for row in rows:
             key = (row["structure"],row["pattern"],row["n"] )
             size_averages.setdefault(key,[]).append(int(row["extract_comparisions"]))
           pattern_averages = {}
-          for key, values in size_averages.items():
-               structure, pattern , n = key 
-               average = sum(values)/len(values)
+          for (structure, pattern,_n), values in size_averages.items():
+              
                pattern_key = (structure , pattern)
-               pattern_averages.setdefault(pattern_key,[]).append(average)
+               pattern_averages.setdefault(pattern_key,[]).append(sum(values)/len(values))
 with summary.open("w", newline="") as csv_file:
        writer = csv.writer(csv_file)
        writer.writerow(["structure","pattern","average_extraction_comparisons"])
@@ -101,11 +100,10 @@ with summary.open("w", newline="") as csv_file:
 
         ranked = []
 
-        for (s, pattern), values in pattern_averages.items():
+        for (item_structure, pattern), values in pattern_averages.items():
 
-            if s == structure:
-                average = sum(values) / len(values)
-                ranked.append((pattern, average))
+            if item_structure == structure:
+                ranked.append((pattern, sum(values) / len(values)))
 
         ranked.sort(key=lambda item: item[1], reverse=True)
 
