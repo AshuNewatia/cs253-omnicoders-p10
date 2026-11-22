@@ -29,60 +29,27 @@ private:
     }
 
     void Sift_Down(int index) {
-        if (2 * index + 1 >= count) {
-            return;
+         while(true) {
+         const int left = 2*index +1;
+         const int right = 2*index+2;
+        int smallest = index ;
+        if (left<count && comes_before(Heap[left],Heap[smallest])) {
+            smallest = left;
         }
 
-        if (2 * index + 2 >= count) {
-            int left = 2 * index + 1;
-
- adversary
-            if (D5_COMPARE(
-                    Heap[left].priority_key < Heap[index].priority_key
-                )) {
-
-            if (comes_before(Heap[left], Heap[index])) {
- main
-                std::swap(Heap[left], Heap[index]);
-
-                table.interchange(
-                    Heap[index].id,
-                    Heap[left].id
-                );
-            }
-
-            return;
+        if (right<count && comes_before(Heap[right],Heap[smallest]) {
+            smallest = right;
         }
-
-        int left = 2 * index + 1;
-        int right = 2 * index + 2;
-
-adversary
-        int smallest =
-            D5_COMPARE(
-                Heap[right].priority_key < Heap[left].priority_key
-            )
-                ? right
-                : left;
-
-        if (D5_COMPARE(
-                Heap[index].priority_key > Heap[smallest].priority_key
-            )) {
-
-        int smallest = comes_before(Heap[right], Heap[left]) ? right : left;
-
-        if (comes_before(Heap[smallest], Heap[index])) {
- main
-            std::swap(Heap[index], Heap[smallest]);
-
-            table.interchange(
-                Heap[index].id,
-                Heap[smallest].id
-            );
-
-            Sift_Down(smallest);
-        }
+       if (smallest == index){
+           return ;
+       }
+         std::swap(Heap[index],Heap[smallest]);
+         table.interchange(Heap[index].id,Heap[smallest].id);
+           index= smallest;
+         }
     }
+
+
 
     void heapify() {
         for (int i = count / 2 - 1; i >= 0; i--) {
@@ -91,19 +58,14 @@ adversary
     }
 
     void Insertify(int index) {
-        if (index <= 0) {
+        while (index > 0) {
+            const int parent = (index-1)/2;
+            if(!comes_before(Heap[index],Heap[parent]))
+            {
             return;
         }
+            
 
-        int parent = (index - 1) / 2;
-
- adversary
-        if (D5_COMPARE(
-                Heap[parent].priority_key > Heap[index].priority_key
-            )) {
-
-        if (comes_before(Heap[index], Heap[parent])) {
- main
             std::swap(Heap[parent], Heap[index]);
 
             table.interchange(
@@ -111,7 +73,7 @@ adversary
                 Heap[parent].id
             );
 
-            Insertify(parent);
+            index = parent;
         }
     }
 
@@ -216,8 +178,6 @@ public:
     }
 };
 
- adversary
+ 
 #undef D5_COMPARE
 
-#undef D5_COMPARE
- main
