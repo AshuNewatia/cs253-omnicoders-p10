@@ -15,7 +15,7 @@ PATTERNS = ["ascending", "descending", "alternating", "sawtooth",
 
 
 def run(cmd, **kwargs):
-    subprocess.run([str(x) for x in cmd], check=True, **kwargs)
+    subprocess.run([str(item) for item in cmd], check=True, **kwargs)
 
 
 def main():
@@ -24,39 +24,47 @@ def main():
     parser.add_argument("--seeds", default="12345,2026,7",
                         help="comma-separated seeds; used for random pattern")
     args = parser.parse_args()
-    sizes = [int(x) for x in args.sizes.split(",")]
-    seeds = [int(x) for x in args.seeds.split(",")]
-    if any(n < 2 for n in sizes):
-        parser.error("all sizes must be >= 2")
+  try:
+    sizes = [int(value.strip()) for value in args.sizes.split(",") if value.strip()]
+    seeds = [int(value.strip()) for value in args.seeds.split(",") if value.strip()]
+  except ValueError:
+              parser.error("sizes and seeds must contain comma-separated integers")
+    if not sizes or any(size < 2 for size in sizes):
+        parser.error("provide atleast one size , and all sizes must be >= 2")
     if not seeds:
         parser.error("at least one seed is required ")
 
-    RESULTS.mkdir(exist_ok=True)
-    generator = ADV / ("adversary.exe" if sys.platform == "win32" else "adversary")
-    bench_a = ADV / ("heap_benchmark_A.exe" if sys.platform == "win32" else "heap_benchmark_A")
-    bench_b = ADV / ("heap_benchmark_B.exe" if sys.platform == "win32" else "heap_benchmark_B")
-    cxx = "g++"
-    common = [cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-pedantic", "-DD5_COUNT_COMPARISONS"]
-    run(common + [ADV / "Adversary.cpp", "-o", generator])
-    run(common + ["-DTEST_STRUCTURE_A", ADV / "D5_HeapBenchmark.cpp", "-o", bench_a])
-    run(common + [ADV / "D5_HeapBenchmark.cpp", "-o", bench_b])
+    RESULTS.mkdir(parents=True , exist_ok=True)
+    executable_suffix = ".exe" if sys.platform == "win32" else ""
+   generator = ADV / f"adversary{executable_suffix}"
+    benchmark_a = ADV / f"heap_benchmark_A{executable_suffix}"
+    benchmark_b = ADV / f"heap_benchmark_B{executable_suffix}"
+    compiler = "g++"
+    common_flags = [compiler, "-std=c++17", "-O2", "-Wall", "-Wextra", "-pedantic", "-DD5_COUNT_COMPARISONS"]
+    run(common_flags + [ADV / "Adversary.cpp", "-o", generator])
+    run(common_flags + ["-DTEST_STRUCTURE_A", ADV / "D5_HeapBenchmark.cpp", "-o", benchmark_a])
+    run(common_flags + [ADV / "D5_HeapBenchmark.cpp", "-o", benchmark_b])
 
     output = RESULTS / "d5_experiment_results.csv"
+    summary = RESULTS / "d5_worst_patterns.csv"
     fields = ["structure", "pattern", "seed", "n", "build_comparisons",
               "extract_comparisons", "extract_comparisons_per_nlog2n"]
     rows = []
     for n in sizes:
         for pattern in PATTERNS:
             use_seeds = seeds if pattern == "random" else [seeds[0]]
-            for seed in use_seeds:
+            for seed in pattern_seeds:
                 csv_path = ADV / f"input_{n}_{pattern}_{seed}.csv"
             try:
-                with csv_path.open("w", newline="") as f:
-                    run([generator, n, pattern, seed], stdout=f)
-                for structure, exe in (("A", bench_a), ("B", bench_b)):
-                    result = subprocess.run([str(exe), str(csv_path)], check=True,
+                with csv_path.open("w", newline="") as csv_file:
+                    run([generator, n, pattern, seed], stdout=csv_file)
+                for structure, executable in (("A", benchmark_a), ("B", benchmark_b)):
+                    result = subprocess.run([str(executable), str(csv_path)], check=True,
                                              capture_output=True, text=True)
-                    parsed = list(csv.DictReader(result.stdout.splitlines()))[0]
+                    parsed_rows = list(csv.DictReader(result.stdout.splitlines()))
+                            if len(parsed_rows) != 1:
+                                        raise RuntimeError(f"unexpected benchmark output for structure {structure}:"f"expected one data row, got {len(parsed_rows)}")
+                                        parsed = parsed_rows[0]
                     comparisons = int(parsed["extract_comparisons"])
                     rows.append({
                         "structure": structure, "pattern": pattern, "seed": seed,
@@ -64,31 +72,29 @@ def main():
                         "extract_comparisons": comparisons,
                         "extract_comparisons_per_nlog2n":
                             f"{comparisons / (n * math.log2(n)):.6f}"
+                                ),
                     })
             finally:
                 csv_path.unlink(missing_ok=True)
                 print(f"completed n={n}, pattern={pattern}, seed={seed}")
 
-    with output.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
+    with output.open("w", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
 
-summary = RESULTS / "d5_worst_patterns.csv"
-
 size_average = {}
 for row in rows:
-            key = (row["structure'],row["pattern"],row["n"] )
-            size_averages.setdefault(key,[]).append(
-                                                     row["extract_comparisions"])
+            key = (row["structure"],row["pattern"],row["n"] )
+            size_averages.setdefault(key,[]).append(int(row["extract_comparisions"]))
           pattern_averages = {}
           for key, values in size_averages.items():
                structure, pattern , n = key 
                average = sum(values)/len(values)
                pattern_key = (structure , pattern)
                pattern_averages.setdefault(pattern_key,[]).append(average)
-with summary.open("w", newline="") as f:
-       writer = csv.writer(f)
+with summary.open("w", newline="") as csv_file:
+       writer = csv.writer(csv_file)
        writer.writerow(["structure","pattern","average_extraction_comparisons"])
 
     for structure in ("A", "B"):
@@ -101,7 +107,7 @@ with summary.open("w", newline="") as f:
                 average = sum(values) / len(values)
                 ranked.append((pattern, average))
 
-        ranked.sort(key=lambda x: x[1], reverse=True)
+        ranked.sort(key=lambda item: item[1], reverse=True)
 
         for pattern, average in ranked:
             writer.writerow([
