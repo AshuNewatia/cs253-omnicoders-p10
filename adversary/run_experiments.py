@@ -25,20 +25,20 @@ def main():
                         help="comma-separated seeds; used for random pattern")
     args = parser.parse_args()
   try:
-    sizes = [int(value.strip()) for value in args.sizes.split(",") if value.strip()]
-    seeds = [int(value.strip()) for value in args.seeds.split(",") if value.strip()]
+    sizes = [int(v.strip()) for v in args.sizes.split(",") if v.strip()]
+    seeds = [int(v.strip()) for v in args.seeds.split(",") if v.strip()]
   except ValueError:
               parser.error("sizes and seeds must contain comma-separated integers")
-    if not sizes or any(size < 2 for size in sizes):
+    if not sizes or any(n < 2 for n in sizes):
         parser.error("provide atleast one size , and all sizes must be >= 2")
     if not seeds:
         parser.error("at least one seed is required ")
 
     RESULTS.mkdir(parents=True , exist_ok=True)
-    executable_suffix = ".exe" if sys.platform == "win32" else ""
-   generator = ADV / f"adversary{executable_suffix}"
-    benchmark_a = ADV / f"heap_benchmark_A{executable_suffix}"
-    benchmark_b = ADV / f"heap_benchmark_B{executable_suffix}"
+    suffix = ".exe" if sys.platform == "win32" else ""
+   generator = ADV / f"adversary{suffix}"
+    benchmark_a = ADV / f"heap_benchmark_A{suffix}"
+    benchmark_b = ADV / f"heap_benchmark_B{suffix}"
     compiler = "g++"
     common_flags = [compiler, "-std=c++17", "-O2", "-Wall", "-Wextra", "-pedantic", "-DD5_COUNT_COMPARISONS"]
     run(common_flags + [ADV / "Adversary.cpp", "-o", generator])
@@ -72,7 +72,7 @@ def main():
                         "extract_comparisons": comparisons,
                         "extract_comparisons_per_nlog2n":
                             f"{comparisons / (n * math.log2(n)):.6f}"
-                                ),
+                                
                     })
             finally:
                if csv_path.exists():csv_path.unlink()
@@ -83,27 +83,26 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
 
-size_average = {}
+per_size = {}
 for row in rows:
             key = (row["structure"],row["pattern"],row["n"] )
-            size_averages.setdefault(key,[]).append(int(row["extract_comparisions"]))
+            per_size.setdefault(key,[]).append(row["extract_comparisions"])
           pattern_averages = {}
-          for (structure, pattern,_n), values in size_averages.items():
+          for (structure, pattern,_n), values in per_size.items():
               
-               pattern_key = (structure , pattern)
-               pattern_averages.setdefault(pattern_key,[]).append(sum(values)/len(values))
+               key = (structure , pattern)
+               pattern_averages.setdefault(key,[]).append(sum(values)/len(values))
 with summary.open("w", newline="") as csv_file:
        writer = csv.writer(csv_file)
        writer.writerow(["structure","pattern","average_extraction_comparisons"])
 
     for structure in ("A", "B"):
 
-        ranked = []
+        ranked = [(pattern,sum(values)/len(values))
+                 for(item_structure,pattern),values in pattern_averages.items()
+                 if item_structure ==structure
+                 ]
 
-        for (item_structure, pattern), values in pattern_averages.items():
-
-            if item_structure == structure:
-                ranked.append((pattern, sum(values) / len(values)))
 
         ranked.sort(key=lambda item: item[1], reverse=True)
 
