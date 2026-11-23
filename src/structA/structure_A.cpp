@@ -9,9 +9,6 @@
 
 #ifdef D5_COUNT_COMPARISONS
 extern unsigned long long d5_comparisons;
-#define D5_COMPARE(expression) (++d5_comparisons, (expression))
-#else
-#define D5_COMPARE(expression) (expression)
 #endif
 
 class Min_Heap : public ITriageQueue {
@@ -21,66 +18,39 @@ private:
     int count = 0;
 
     static bool comes_before(const Patient& a, const Patient& b) {
+#ifdef D5_COUNT_COMPARISONS
+        ++d5_comparisons; // Count one comparator invocation.
+#endif
         if (a.priority_key != b.priority_key)
-            return D5_COMPARE(a.priority_key < b.priority_key);
+            return a.priority_key < b.priority_key;
+
         if (a.arrival_time != b.arrival_time)
             return a.arrival_time < b.arrival_time;
+
         return a.id < b.id;
     }
 
     void Sift_Down(int index) {
-        if (2 * index + 1 >= count) {
-            return;
-        }
+        while (true) {
+            const int left = 2 * index + 1;
+            const int right = 2 * index + 2;
+            int smallest = index;
 
-        if (2 * index + 2 >= count) {
-            int left = 2 * index + 1;
-
- adversary
-            if (D5_COMPARE(
-                    Heap[left].priority_key < Heap[index].priority_key
-                )) {
-
-            if (comes_before(Heap[left], Heap[index])) {
- main
-                std::swap(Heap[left], Heap[index]);
-
-                table.interchange(
-                    Heap[index].id,
-                    Heap[left].id
-                );
+            if (left < count && comes_before(Heap[left], Heap[smallest])) {
+                smallest = left;
             }
 
-            return;
-        }
+            if (right < count && comes_before(Heap[right], Heap[smallest])) {
+                smallest = right;
+            }
 
-        int left = 2 * index + 1;
-        int right = 2 * index + 2;
+            if (smallest == index) {
+                return;
+            }
 
-adversary
-        int smallest =
-            D5_COMPARE(
-                Heap[right].priority_key < Heap[left].priority_key
-            )
-                ? right
-                : left;
-
-        if (D5_COMPARE(
-                Heap[index].priority_key > Heap[smallest].priority_key
-            )) {
-
-        int smallest = comes_before(Heap[right], Heap[left]) ? right : left;
-
-        if (comes_before(Heap[smallest], Heap[index])) {
- main
             std::swap(Heap[index], Heap[smallest]);
-
-            table.interchange(
-                Heap[index].id,
-                Heap[smallest].id
-            );
-
-            Sift_Down(smallest);
+            table.interchange(Heap[index].id, Heap[smallest].id);
+            index = smallest;
         }
     }
 
@@ -91,19 +61,13 @@ adversary
     }
 
     void Insertify(int index) {
-        if (index <= 0) {
-            return;
-        }
+        while (index > 0) {
+            const int parent = (index - 1) / 2;
 
-        int parent = (index - 1) / 2;
+            if (!comes_before(Heap[index], Heap[parent])) {
+                return;
+            }
 
- adversary
-        if (D5_COMPARE(
-                Heap[parent].priority_key > Heap[index].priority_key
-            )) {
-
-        if (comes_before(Heap[index], Heap[parent])) {
- main
             std::swap(Heap[parent], Heap[index]);
 
             table.interchange(
@@ -111,7 +75,7 @@ adversary
                 Heap[parent].id
             );
 
-            Insertify(parent);
+            index = parent;
         }
     }
 
@@ -122,9 +86,7 @@ public:
         build_heap(patients);
     }
 
-    void build_heap(
-        const std::vector<Patient>& patients
-    ) override {
+    void build_heap(const std::vector<Patient>& patients) override {
         table = LookUp();
         Heap = patients;
         count = static_cast<int>(Heap.size());
@@ -197,27 +159,26 @@ public:
         count--;
 
         if (index < count) {
-            if (index > 0 && comes_before(Heap[index], Heap[(index - 1) / 2]))
+            if (index > 0 &&
+                comes_before(Heap[index], Heap[(index - 1) / 2])) {
                 Insertify(index);
-            else
+            } else {
                 Sift_Down(index);
+            }
         }
     }
 
     void decrease_key(int id, long long new_key) override {
         int index = table.find(id);
 
-        if (new_key > Heap[index].priority_key)
-            throw std::invalid_argument("decrease_key cannot increase the key");
+        if (new_key > Heap[index].priority_key) {
+            throw std::invalid_argument(
+                "decrease_key cannot increase the key"
+            );
+        }
 
         Heap[index].priority_key = new_key;
 
         Insertify(index);
     }
 };
-
- adversary
-#undef D5_COMPARE
-
-#undef D5_COMPARE
- main
